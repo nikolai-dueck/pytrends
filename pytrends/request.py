@@ -88,7 +88,7 @@ class TrendReq(object):
                             **self.requests_args
                         ).cookies.items()))
                     else:
-                        return dict(filter(lambda i: i[0] == 'NID', requests.get(
+                        return dict(filter(lambda i: i[0] == 'NID', requests.post(
                             f'{BASE_TRENDS_URL}/?geo={self.hl[-2:]}',
                             timeout=self.timeout,
                             **self.requests_args
@@ -110,7 +110,7 @@ class TrendReq(object):
                             **self.requests_args
                         ).cookies.items()))
                     else:
-                        return dict(filter(lambda i: i[0] == 'NID', requests.get(
+                        return dict(filter(lambda i: i[0] == 'NID', requests.post(
                             f'{BASE_TRENDS_URL}/?geo={self.hl[-2:]}',
                             timeout=self.timeout,
                             proxies=proxy,
