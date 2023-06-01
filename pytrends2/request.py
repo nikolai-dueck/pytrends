@@ -6,7 +6,7 @@ import requests
 from requests.adapters import HTTPAdapter
 from requests.packages.urllib3.util.retry import Retry
 from requests import status_codes
-from pytrends import exceptions
+from pytrends2 import exceptions
 from urllib.parse import quote
 
 BASE_TRENDS_URL = 'https://trends.google.com/trends'
