@@ -1,3 +1,4 @@
+from itertools import product
 import json
 import pandas as pd
 from curl_cffi import requests as curl_requests
@@ -31,7 +32,7 @@ class TrendReq(object):
     ERROR_CODES = (500, 502, 504, 429)
 
     def __init__(self, hl='en-US', tz=360, geo='', timeout=(2, 5), proxies='',
-                 retries=0, backoff_factor=0, impersonate=None, requests_args=None):
+                 retries=0, backoff_factor=0, new_cookie_url=False, impersonate=None, requests_args=None):
         """
         Initialize default values for params
         """
@@ -49,6 +50,7 @@ class TrendReq(object):
         self.backoff_factor = backoff_factor
         self.proxy_index = 0
         self.requests_args = requests_args or {}
+        self.new_cookie_url = new_cookie_url
         
         if impersonate:
             assert(BrowserType.has(impersonate))
@@ -70,26 +72,26 @@ class TrendReq(object):
         self.headers = {'accept-language': self.hl}
         self.headers.update(self.requests_args.pop('headers', {}))
         
-        
-        
     def GetGoogleCookie(self):
         """
         Gets google cookie (used for each and every proxy; once on init otherwise)
         Removes proxy from the list on proxy error
         """
+        cookie_url = f'{BASE_TRENDS_URL}/explore/?geo={self.hl[-2:]}' if self.new_cookie_url else f'{BASE_TRENDS_URL}/?geo={self.hl[-2:]}'
+
         while True:
             if "proxies" in self.requests_args:
                 try:
                     if self.impersonate:
                         return dict(filter(lambda i: i[0] == 'NID', curl_requests.get(
-                            f'{BASE_TRENDS_URL}/?geo={self.hl[-2:]}',
+                            cookie_url,
                             timeout=self.timeout,
                             impersonate=self.impersonate,
                             **self.requests_args
                         ).cookies.items()))
                     else:
                         return dict(filter(lambda i: i[0] == 'NID', requests.post(
-                            f'{BASE_TRENDS_URL}/?geo={self.hl[-2:]}',
+                            cookie_url,
                             timeout=self.timeout,
                             **self.requests_args
                         ).cookies.items()))
@@ -103,7 +105,7 @@ class TrendReq(object):
                 try:
                     if self.impersonate:
                         return dict(filter(lambda i: i[0] == 'NID', curl_requests.get(
-                            f'{BASE_TRENDS_URL}/?geo={self.hl[-2:]}',
+                            cookie_url,
                             timeout=self.timeout,
                             proxies=proxy,
                             impersonate=self.impersonate,
@@ -111,7 +113,7 @@ class TrendReq(object):
                         ).cookies.items()))
                     else:
                         return dict(filter(lambda i: i[0] == 'NID', requests.post(
-                            f'{BASE_TRENDS_URL}/?geo={self.hl[-2:]}',
+                            cookie_url,
                             timeout=self.timeout,
                             proxies=proxy,
                             **self.requests_args
@@ -212,15 +214,18 @@ class TrendReq(object):
             'req': {'comparisonItem': [], 'category': cat, 'property': gprop}
         }
 
+        if not isinstance(self.geo, list):
+            self.geo = [self.geo]
+
         # Check if timeframe is a list
         if isinstance(timeframe, list):
-            for index, kw in enumerate(self.kw_list):
-                keyword_payload = {'keyword': kw, 'time': timeframe[index], 'geo': self.geo}
+            for index, (kw, geo) in enumerate(product(self.kw_list, self.geo)):
+                keyword_payload = {'keyword': kw, 'time': timeframe[index], 'geo': geo}
                 self.token_payload['req']['comparisonItem'].append(keyword_payload)
-        else: 
+        else:
             # build out json for each keyword with
-            for kw in self.kw_list:
-                keyword_payload = {'keyword': kw, 'time': timeframe, 'geo': self.geo}
+            for kw, geo in product(self.kw_list, self.geo):
+                keyword_payload = {'keyword': kw, 'time': timeframe, 'geo': geo}
                 self.token_payload['req']['comparisonItem'].append(keyword_payload)
 
         # requests will mangle this if it is not a string
@@ -234,7 +239,7 @@ class TrendReq(object):
         # make the request and parse the returned json
         widget_dicts = self._get_data(
             url=TrendReq.GENERAL_URL,
-            method=TrendReq.GET_METHOD,
+            method=TrendReq.POST_METHOD,
             params=self.token_payload,
             trim_chars=4,
         )['widgets']
@@ -287,10 +292,12 @@ class TrendReq(object):
         result_df = df['value'].apply(lambda x: pd.Series(
             str(x).replace('[', '').replace(']', '').split(',')))
         # rename each column with its search term, relying on order that google provides...
-        for idx, kw in enumerate(self.kw_list):
+
+        for idx, (kw, g) in enumerate(product(self.kw_list, self.geo)):
             # there is currently a bug with assigning columns that may be
             # parsed as a date in pandas: use explicit insert column method
-            result_df.insert(len(result_df.columns), kw,
+            name = kw if len(self.geo) == 1 else (kw, g)
+            result_df.insert(len(result_df.columns), name,
                              result_df[idx].astype('int'))
             del result_df[idx]
 
@@ -309,6 +316,11 @@ class TrendReq(object):
             final = result_df
             final['isPartial'] = False
 
+        if len(self.geo) > 1:
+            final.columns = pd.MultiIndex.from_tuples(
+                [c if isinstance(c, tuple) else (c, ) for c in final],
+                names=['keyword', 'region']
+            )
         return final
 
     def multirange_interest_over_time(self):
@@ -338,9 +350,9 @@ class TrendReq(object):
         # Split dictionary columns into seperate ones
         for i, column in enumerate(result_df.columns):
             result_df["[" + str(i) + "] " + str(self.kw_list[i]) + " date"] = result_df[i].apply(pd.Series)["formattedTime"]
-            result_df["[" + str(i) + "] " + str(self.kw_list[i]) + " value"] = result_df[i].apply(pd.Series)["value"]   
+            result_df["[" + str(i) + "] " + str(self.kw_list[i]) + " value"] = result_df[i].apply(pd.Series)["value"]
             result_df = result_df.drop([i], axis=1)
-        
+
         # Adds a row with the averages at the top of the dataframe
         avg_row = {}
         for i, avg in enumerate(req_json['default']['averages']):
@@ -350,7 +362,7 @@ class TrendReq(object):
         result_df.loc[-1] = avg_row
         result_df.index = result_df.index + 1
         result_df = result_df.sort_index()
-        
+
         return result_df
 
 
@@ -520,7 +532,7 @@ class TrendReq(object):
 
     def today_searches(self, pn='US'):
         """Request data from Google Daily Trends section and returns a dataframe"""
-        forms = {'ns': 15, 'geo': pn, 'tz': '-180', 'hl': 'en-US'}
+        forms = {'ns': 15, 'geo': pn, 'tz': '-180', 'hl': self.hl}
         req_json = self._get_data(
             url=TrendReq.TODAY_SEARCHES_URL,
             method=TrendReq.GET_METHOD,
@@ -553,7 +565,7 @@ class TrendReq(object):
         if count < rs_value:
             rs_value = count-1
 
-        forms = {'ns': 15, 'geo': pn, 'tz': '300', 'hl': 'en-US', 'cat': cat, 'fi' : '0', 'fs' : '0', 'ri' : ri_value, 'rs' : rs_value, 'sort' : 0}
+        forms = {'ns': 15, 'geo': pn, 'tz': '300', 'hl': self.hl, 'cat': cat, 'fi' : '0', 'fs' : '0', 'ri' : ri_value, 'rs' : rs_value, 'sort' : 0}
         req_json = self._get_data(
             url=TrendReq.REALTIME_TRENDING_SEARCHES_URL,
             method=TrendReq.GET_METHOD,
@@ -628,7 +640,7 @@ class TrendReq(object):
         raise NotImplementedError(
             """This method has been removed for incorrectness. It will be removed completely in v5.
 If you'd like similar functionality, please try implementing it yourself and consider submitting a pull request to add it to pytrends.
-          
+
 There is discussion at:
 https://github.com/GeneralMills/pytrends/pull/542"""
         )
