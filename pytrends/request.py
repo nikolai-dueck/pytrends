@@ -236,10 +236,11 @@ class TrendReq(object):
 
     def _tokens(self):
         """Makes request to Google to get API tokens for interest over time, interest by region and related queries"""
+        rest_method = TrendReq.GET_METHOD if self.new_cookie_url else TrendReq.POST_METHOD
         # make the request and parse the returned json
         widget_dicts = self._get_data(
             url=TrendReq.GENERAL_URL,
-            method=TrendReq.POST_METHOD,
+            method=rest_method,
             params=self.token_payload,
             trim_chars=4,
         )['widgets']
