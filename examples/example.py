@@ -1,4 +1,4 @@
-from pytrends.request import TrendReq
+from pytrends2.request import TrendReq
 
 # Only need to run this once, the rest of requests will use the same session.
 pytrend = TrendReq()

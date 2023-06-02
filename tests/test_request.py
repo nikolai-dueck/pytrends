@@ -8,7 +8,7 @@ import pytest
 import responses
 from pandas.testing import assert_frame_equal
 
-from pytrends.request import TrendReq, BASE_TRENDS_URL
+from pytrends2.request import TrendReq, BASE_TRENDS_URL
 
 
 @dataclass

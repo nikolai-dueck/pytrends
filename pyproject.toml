@@ -3,7 +3,7 @@ requires = ["setuptools", "setuptools-scm"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "pytrends"
+name = "pytrends2"
 version = "4.9.0"
 description = "Pseudo API for Google Trends"
 urls = {homepage = "https://github.com/dreyco676/pytrends"}
@@ -30,7 +30,7 @@ keywords = [
 dynamic = ["readme", "dependencies"]
 
 [tool.setuptools]
-packages = ["pytrends"]
+packages = ["pytrends2"]
 
 # Taken from https://github.com/pypa/setuptools/blob/d138ec08efc2dbaebb8752e215e324f38bd807a2/setuptools/tests/config/test_pyprojecttoml.py#L68
 [tool.setuptools.dynamic.readme]
@@ -48,4 +48,4 @@ precision = 2
 show_missing = true
 
 [tool.pytest.ini_options]
-addopts = "--cov pytrends/"
+addopts = "--cov pytrends2/"
